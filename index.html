@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stress–Strain Analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Spectral:wght@500;600&display=swap" rel="stylesheet">
+<style>
+/* VOICE: clinical lab instrument, calm and exact
+   IDEA: the console of a universal testing machine
+   PICTURE: the live stress–strain curve beside the crystal it comes from
+   COLOUR and TYPE: white ground, ink, ultramarine accent, one colour per curve region; Spectral titles, Inter UI
+   LAYOUT: controls | curve + results | specimen + lattice + explanation */
+:root{color-scheme:light;
+--bg:#f4f5f8;--card:#ffffff;--ink:#14110f;--mute:#5d6170;--line:#dfe2ea;--grid:#e9ebf1;
+--acc:#1d2bd8;--acc2:#e8eafd;--curve:#14110f;--atom:#3d4fd6;--metal1:#e9ecf2;--metal2:#a9b0bf;
+--c-el:#2563eb;--c-yl:#7c3aed;--c-pl:#059669;--c-nk:#d97706;--c-fr:#dc2626}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){color-scheme:dark;
+--bg:#0d0e18;--card:#161828;--ink:#eef0f7;--mute:#a2a7ba;--line:#2a2d44;--grid:#22253a;
+--acc:#7d87ff;--acc2:#23275a;--curve:#eef0f7;--atom:#8b96ff;--metal1:#4a5163;--metal2:#2a2f3c;
+--c-el:#60a5fa;--c-yl:#a78bfa;--c-pl:#34d399;--c-nk:#fbbf24;--c-fr:#f87171}}
+:root[data-theme=dark]{color-scheme:dark;
+--bg:#0d0e18;--card:#161828;--ink:#eef0f7;--mute:#a2a7ba;--line:#2a2d44;--grid:#22253a;
+--acc:#7d87ff;--acc2:#23275a;--curve:#eef0f7;--atom:#8b96ff;--metal1:#4a5163;--metal2:#2a2f3c;
+--c-el:#60a5fa;--c-yl:#a78bfa;--c-pl:#34d399;--c-nk:#fbbf24;--c-fr:#f87171}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow-x:clip}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 18px;padding:18px max(2vw,14px) 8px}
+h1{font:600 clamp(24px,2.6vw,34px)/1.05 Spectral,Georgia,serif;margin:0;letter-spacing:-.01em}
+header p{margin:0;color:var(--mute)}
+.grid{display:grid;grid-template-columns:270px minmax(0,1fr) 400px;gap:14px;padding:8px max(2vw,14px) 20px;align-items:start}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px}
+.card+.card{margin-top:14px}
+h2{font:600 13px/1.3 Inter,sans-serif;margin:0 0 10px;color:var(--mute)}
+h3{font:600 18px/1.2 Spectral,Georgia,serif;margin:0 0 6px}
+label.f{display:block;font-size:13px;color:var(--mute);margin:8px 0 4px}
+select,input[type=number],input[type=text],textarea{width:100%;font:15px Inter,sans-serif;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink)}
+textarea{font:13px/1.4 ui-monospace,Menlo,monospace;min-height:80px}
+button{font:500 14px Inter,sans-serif;min-height:40px;padding:8px 12px;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--ink);cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px}
+button:hover{border-color:var(--acc)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.pri{background:var(--acc);color:#fff;border-color:var(--acc)}
+button.pri:hover{filter:brightness(1.1)}
+button:disabled{opacity:.5;cursor:default}
+.stack{display:grid;gap:7px}
+.row{display:flex;gap:7px;flex-wrap:wrap}.row>*{flex:1 1 0}
+.step .n{display:inline-grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--acc2);color:var(--acc);font-size:12px;font-weight:700;flex:none}
+.step.done .n{background:var(--c-pl);color:#fff}
+.step .n::after{content:attr(data-n)}.step.done .n::after{content:"✓"}
+.chk{display:flex;align-items:center;gap:8px;font-size:14px;margin:6px 0;cursor:pointer}
+.chk input{width:18px;height:18px;accent-color:var(--acc)}
+.seg{display:flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;flex:1;justify-content:center;min-height:36px}
+.seg button.on{background:var(--acc);color:#fff}
+.fig{position:relative}.fig>canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#plotWrap{height:clamp(340px,52vh,520px);cursor:crosshair;touch-action:none}
+#specWrap{height:150px}#latWrap{height:330px}
+.plotHead{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px;margin-bottom:6px}
+.legend{display:flex;flex-wrap:wrap;gap:4px 12px;font-size:12.5px;color:var(--mute)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.scrub{display:flex;align-items:center;gap:10px;margin-top:8px}
+.scrub input{flex:1;accent-color:var(--acc);height:28px}
+.readout{font-variant-numeric:tabular-nums;font-size:13.5px;white-space:nowrap;color:var(--mute)}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th,td{padding:7px 8px;border-bottom:1px solid var(--line);text-align:left}
+th{font-size:12px;color:var(--mute);font-weight:600}
+td.v,th.v{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td.v b{font-weight:700}
+tr.pending td{color:var(--mute)}
+#log{margin:0;padding-left:20px;font-size:13.5px;max-height:220px;overflow:auto}
+#log li{margin:4px 0}
+#log li b{color:var(--acc)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.chip{font-size:12.5px;padding:3px 9px;border-radius:99px;background:var(--acc2);color:var(--ink);white-space:nowrap;font-variant-numeric:tabular-nums}
+#explain .tag{display:inline-block;font-size:12px;font-weight:700;color:#fff;padding:2px 9px;border-radius:99px;margin-bottom:6px}
+#explain p{margin:4px 0 8px}
+.formula{font:14px/1.5 Spectral,Georgia,serif;background:var(--bg);border-radius:8px;padding:8px 10px}
+.note{font-size:12.5px;color:var(--mute)}
+details.theory{margin:0 max(2vw,14px) 30px}
+details.theory summary{cursor:pointer;font:600 18px Spectral,Georgia,serif;padding:6px 0}
+.tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:10px}
+.tgrid .card{margin:0}
+.tgrid h4{margin:0 0 4px;font-size:14px}
+.tgrid p{margin:0;font-size:13.5px;color:var(--mute)}
+.modal{position:fixed;inset:0;background:rgba(10,12,25,.55);display:flex;align-items:flex-start;justify-content:center;padding:3vh 2vw;z-index:20;overflow:auto}
+.modal[hidden]{display:none}
+.modal .card{width:min(1100px,100%)}
+#dgCv{width:100%;display:block;border:1px solid var(--line);border-radius:8px;background:#fff;cursor:crosshair}
+.dgbar{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-bottom:10px}
+.dgbar .card{margin:0;padding:10px}
+.cal{display:grid;grid-template-columns:auto 1fr;gap:6px;align-items:center;font-size:13px}
+.cal input{padding:5px 8px;font-size:14px}
+.sw{display:inline-block;width:18px;height:18px;border-radius:4px;border:1px solid var(--line);vertical-align:middle}
+#dgStatus{font-size:14px;color:var(--acc);margin:6px 0 8px;font-weight:500}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;font-size:14px;z-index:40;opacity:0;transition:opacity .25s;pointer-events:none;max-width:90vw}
+#toast.on{opacity:1}
+@media (max-width:1280px){.grid{grid-template-columns:260px minmax(0,1fr)}#right{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px}#right .card+.card{margin-top:0}}
+@media (max-width:760px){.grid{grid-template-columns:minmax(0,1fr)}#left{order:2}#center{order:1}#right{order:3}table{font-size:13px}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <h1>Stress–Strain Analyzer</h1>
+  <p>Mechanical property extraction from a tensile test, linked to what dislocations do inside the metal</p>
+</header>
+
+<div class="grid">
+<!-- LEFT: controls -->
+<aside id="left">
+  <div class="card">
+    <h2>1 · Load data</h2>
+    <label class="f" for="mat">Sample material (built-in test data)</label>
+    <select id="mat">
+      <option value="a36">Mild steel A36 (yield point)</option>
+      <option value="al6061">Aluminium 6061-T6</option>
+      <option value="cu">Copper C11000, annealed</option>
+      <option value="ss304">Stainless steel 304, annealed</option>
+      <option value="s4340">Steel 4340, quenched &amp; tempered</option>
+      <option value="ti64">Titanium Ti-6Al-4V</option>
+      <option value="brass">Cartridge brass C26000</option>
+      <option value="mg">Magnesium alloy AZ31B</option>
+      <option value="al1100">Pure aluminium 1100-O</option>
+      <option value="ci">Gray cast iron (brittle)</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="noise" checked> Add experimental noise</label>
+    <div class="stack" style="margin-top:8px">
+      <button id="bUpload">⤒ Upload CSV / TXT file</button>
+      <button id="bImage">🖼 Extract data from graph image</button>
+      <input type="file" id="fileIn" accept=".csv,.txt,.dat,.tsv" hidden>
+    </div>
+    <details style="margin-top:8px">
+      <summary class="note" style="cursor:pointer">Import options / paste data</summary>
+      <label class="f" for="imode">Columns contain</label>
+      <select id="imode"><option value="ss">Strain &amp; stress</option><option value="load">Extension (mm) &amp; load</option></select>
+      <div class="row">
+        <div><label class="f" for="colX">X column</label><input type="number" id="colX" value="1" min="1"></div>
+        <div><label class="f" for="colY">Y column</label><input type="number" id="colY" value="2" min="1"></div>
+      </div>
+      <div id="ssOpts" class="row">
+        <div><label class="f" for="uE">Strain in</label><select id="uE"><option value="mm">mm/mm</option><option value="pct">%</option></select></div>
+        <div><label class="f" for="uS">Stress in</label><select id="uS"><option>MPa</option><option>GPa</option><option>ksi</option><option>psi</option></select></div>
+      </div>
+      <div id="ldOpts" class="row" hidden>
+        <div><label class="f" for="uL">Load in</label><select id="uL"><option>N</option><option>kN</option></select></div>
+        <div><label class="f" for="a0">A₀ (mm²)</label><input type="number" id="a0" value="78.54"></div>
+        <div><label class="f" for="l0">L₀ (mm)</label><input type="number" id="l0" value="50"></div>
+      </div>
+      <label class="f" for="paste">Paste two columns (from Excel or CSV)</label>
+      <textarea id="paste" placeholder="0.000  0&#10;0.001  200&#10;…"></textarea>
+      <div class="row" style="margin-top:6px"><button id="bPaste">Analyse pasted data</button><button id="bCopyData">Copy current data</button></div>
+    </details>
+  </div>
+
+  <div class="card">
+    <h2>2 · Extract properties</h2>
+    <div class="stack">
+      <button class="step" id="bE"><span class="n" data-n="1"></span>Detect modulus E</button>
+      <button class="step" id="bY"><span class="n" data-n="2"></span>0.2% offset yield</button>
+      <button class="step" id="bU"><span class="n" data-n="3"></span>Find UTS</button>
+      <button class="step" id="bEL"><span class="n" data-n="4"></span>% Elongation</button>
+      <button class="step" id="bR"><span class="n" data-n="5"></span>Mark regions</button>
+      <div class="row"><button class="pri" id="bAll" style="justify-content:center">Run all steps</button><button id="bReset" style="justify-content:center;flex:0 0 auto">Reset</button></div>
+    </div>
+    <label class="f" for="off">Offset strain for yield (%)</label>
+    <input type="number" id="off" value="0.2" step="0.05" min="0.01">
+  </div>
+
+  <div class="card">
+    <h2>3 · Visualise</h2>
+    <button class="pri" id="bPlay" style="width:100%;justify-content:center">▶ Play tensile test</button>
+    <label class="f">Plot view</label>
+    <div class="seg"><button id="zFull" class="on">Full curve</button><button id="zEl">Elastic zoom</button></div>
+    <label class="chk"><input type="checkbox" id="inset" checked> Show elastic-region inset</label>
+    <label class="chk"><input type="checkbox" id="trueC"> Overlay true stress–strain</label>
+  </div>
+</aside>
+
+<!-- CENTER: plot + results -->
+<section id="center">
+  <div class="card">
+    <div class="plotHead">
+      <h3 id="plotTitle">Engineering stress–strain curve</h3>
+      <div class="legend">
+        <span><i style="background:var(--c-el)"></i>Elastic</span>
+        <span><i style="background:var(--c-yl)"></i>Yielding</span>
+        <span><i style="background:var(--c-pl)"></i>Strain hardening</span>
+        <span><i style="background:var(--c-nk)"></i>Necking</span>
+        <span><i style="background:var(--c-fr)"></i>Fracture</span>
+      </div>
+    </div>
+    <div class="fig" id="plotWrap"><canvas id="cvPlot" aria-label="Stress strain curve"></canvas></div>
+    <div class="scrub">
+      <input type="range" id="slider" min="0" max="1000" value="0" aria-label="Position along the test">
+      <span class="readout" id="readout">ε = 0 %</span>
+    </div>
+    <p class="note" style="margin:4px 0 0">Move the mouse over the curve or drag the slider: the specimen and the crystal on the right follow.</p>
+  </div>
+
+  <div class="card">
+    <div class="plotHead"><h3>Mechanical properties</h3><button id="bCopy" style="min-height:34px">Copy table</button></div>
+    <div style="overflow-x:auto"><table id="tbl"></table></div>
+  </div>
+
+  <div class="card">
+    <h3>Analysis log</h3>
+    <ol id="log"></ol>
+  </div>
+</section>
+
+<!-- RIGHT: specimen + lattice + explanation -->
+<section id="right">
+  <div class="card">
+    <h2>Specimen (gauge length L₀ = 50 mm)</h2>
+    <div class="fig" id="specWrap"><canvas id="cvSpec" aria-label="Tensile specimen"></canvas></div>
+  </div>
+  <div class="card">
+    <h2>Inside one grain: atoms and dislocations</h2>
+    <div class="fig" id="latWrap"><canvas id="cvLat" aria-label="Crystal lattice with dislocations"></canvas></div>
+    <div class="chips" id="chips"></div>
+  </div>
+  <div class="card" id="explain"></div>
+</section>
+</div>
+
+<details class="theory" open>
+  <summary>Theory and formulas used</summary>
+  <div class="tgrid">
+    <div class="card"><h4>Engineering vs true values</h4><p>σ = F/A₀, ε = ΔL/L₀. True stress σ<sub>T</sub> = σ(1+ε) and true strain ε<sub>T</sub> = ln(1+ε), valid up to the start of necking.</p></div>
+    <div class="card"><h4>Modulus of elasticity</h4><p>Hooke's law σ = Eε. E is the slope of the linear part, found by least-squares regression. It reflects the stiffness of the interatomic bonds.</p></div>
+    <div class="card"><h4>0.2% offset yield</h4><p>A line of slope E is drawn from ε = 0.002. Where it cuts the curve is the yield strength σ<sub>y</sub>, i.e. the stress that leaves 0.2% permanent strain.</p></div>
+    <div class="card"><h4>Ultimate tensile strength</h4><p>UTS = F<sub>max</sub>/A₀, the peak of the engineering curve. Necking begins here (Considère: dσ<sub>T</sub>/dε<sub>T</sub> = σ<sub>T</sub>, so ε<sub>T</sub> at UTS ≈ n).</p></div>
+    <div class="card"><h4>% Elongation</h4><p>%EL = (L<sub>f</sub> − L₀)/L₀ × 100 = (ε<sub>f</sub> − σ<sub>f</sub>/E) × 100. The elastic strain σ<sub>f</sub>/E springs back after fracture, so it is subtracted.</p></div>
+    <div class="card"><h4>Energy</h4><p>Modulus of resilience U<sub>r</sub> = σ<sub>y</sub>²/2E (energy stored elastically). Toughness = ∫σ dε, the whole area under the curve. 1 MPa = 1 MJ/m³.</p></div>
+    <div class="card"><h4>Schmid's law</h4><p>Resolved shear stress τ<sub>R</sub> = σ cosφ cosλ. Slip starts when τ<sub>R</sub> reaches τ<sub>CRSS</sub>. Slip planes at 45° to the load have the maximum Schmid factor, 0.5.</p></div>
+    <div class="card"><h4>Strain hardening</h4><p>Dislocations multiply (Frank–Read sources) and block each other. Taylor relation: σ = σ₀ + MαGb√ρ, where ρ is dislocation density (≈10¹⁰ → 10¹⁴ m⁻²).</p></div>
+    <div class="card"><h4>Grain boundaries and yield point</h4><p>Hall–Petch: σ<sub>y</sub> = σ₀ + k d<sup>−½</sup>. In mild steel, C and N atoms pin dislocations (Cottrell atmospheres), giving an upper and lower yield point and Lüders bands.</p></div>
+  </div>
+</details>
+
+<!-- Image digitizer -->
+<div class="modal" id="dg" hidden>
+  <div class="card">
+    <div class="plotHead"><h3>Extract x–y data from a graph image</h3><button id="dgClose">✕ Close</button></div>
+    <div class="dgbar">
+      <div class="card">
+        <h2>A · Image</h2>
+        <div class="stack">
+          <button id="dgUp">Upload graph image</button>
+          <button id="dgDemo">Load demo graph</button>
+          <input type="file" id="dgFile" accept="image/*" hidden>
+        </div>
+      </div>
+      <div class="card">
+        <h2>B · Calibrate axes</h2>
+        <div class="cal">
+          <span>X₁ value</span><input type="number" id="cx1" value="0">
+          <span>X₂ value</span><input type="number" id="cx2" value="30">
+          <span>Y₁ value</span><input type="number" id="cy1" value="0">
+          <span>Y₂ value</span><input type="number" id="cy2" value="500">
+        </div>
+        <label class="chk"><input type="checkbox" id="dgPct" checked> X axis is strain in %</label>
+        <button id="dgCal" style="width:100%">Click 4 axis points</button>
+      </div>
+      <div class="card">
+        <h2>C · Get the curve</h2>
+        <div class="stack">
+          <button id="dgPick">Pick curve colour <span class="sw" id="dgSw"></span></button>
+          <label class="f" for="dgTol" style="margin:0">Colour tolerance</label>
+          <input type="range" id="dgTol" min="20" max="160" value="80" style="accent-color:var(--acc)">
+          <div class="row"><button id="dgAuto" class="pri" style="justify-content:center">Auto-extract</button><button id="dgMan" style="justify-content:center">Click points</button></div>
+          <div class="row"><button id="dgUndo" style="justify-content:center">Undo</button><button id="dgClear" style="justify-content:center">Clear</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <h2>D · Analyse</h2>
+        <label class="f" for="dgUS" style="margin-top:0">Y axis unit</label>
+        <select id="dgUS"><option>MPa</option><option>GPa</option><option>ksi</option></select>
+        <button id="dgUse" class="pri" style="width:100%;margin-top:8px;justify-content:center">Use these points</button>
+        <p class="note" id="dgCount">0 points</p>
+      </div>
+    </div>
+    <div id="dgStatus">Upload a graph image, or load the demo graph.</div>
+    <canvas id="dgCv" width="900" height="500"></canvas>
+  </div>
+</div>
+
+<div class="modal" id="cpModal" hidden>
+  <div class="card" style="width:min(640px,100%)">
+    <div class="plotHead"><h3>Copy this text</h3><button id="cpClose">✕ Close</button></div>
+    <p class="note">Select all (Ctrl/Cmd + A) and copy, then paste into Excel or your report.</p>
+    <textarea id="cpText" style="min-height:260px"></textarea>
+  </div>
+</div>
+<div id="toast"></div>
+
+<script>
+{
+/* ================= CORE (generators + analysis) ================= */
+//CORE-START
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,t)=>a+(b-a)*t;
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function gauss(r){let u=0,v=0;while(u===0)u=r();while(v===0)v=r();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);}
+
+/* Built-in materials. 'ro' = modified Ramberg–Osgood: linear up to the proportional limit sp,
+   plastic strain 0.002*((σ-sp)/(sy-sp))^n above it, so the 0.2% offset yield is exactly sy.
+   'yp' = mild steel with upper/lower yield point and Lüders plateau.
+   Reference values: typical handbook data (Callister, Materials Science & Engineering). */
+const MATERIALS={
+  a36:{name:'Mild steel A36',type:'yp',E:200000,suy:290,sly:255,eL:0.018,K:465,nh:0.55,en:0.17,ef:0.245,drop:0.30,m:2,
+       ref:{E:'200',ys:'250',uts:'400–550',el:'23'}},
+  al6061:{name:'Aluminium 6061-T6',type:'ro',E:68900,sy:276,sp:193,n:10.6,en:0.08,ef:0.13,drop:0.2,m:2,
+       ref:{E:'69',ys:'276',uts:'310',el:'12'}},
+  cu:{name:'Copper C11000 (annealed)',type:'ro',E:110000,sy:69,sp:34.5,n:3.16,en:0.38,ef:0.46,drop:0.3,m:1.8,
+       ref:{E:'110',ys:'69',uts:'220',el:'45'}},
+  ss304:{name:'Stainless steel 304 (annealed)',type:'ro',E:193000,sy:205,sp:123,n:3.32,en:0.36,ef:0.44,drop:0.25,m:2,
+       ref:{E:'193',ys:'205',uts:'515',el:'40'}},
+  s4340:{name:'Steel 4340 (Q&T)',type:'ro',E:207000,sy:1620,sp:1215,n:11.3,en:0.065,ef:0.12,drop:0.18,m:2,
+       ref:{E:'207',ys:'1620',uts:'1760',el:'12'}},
+  ti64:{name:'Titanium Ti-6Al-4V (annealed)',type:'ro',E:114000,sy:880,sp:704,n:11.1,en:0.09,ef:0.15,drop:0.15,m:2,
+       ref:{E:'114',ys:'880',uts:'950',el:'14'}},
+  brass:{name:'Cartridge brass C26000 (annealed)',type:'ro',E:110000,sy:75,sp:37.5,n:2.88,en:0.55,ef:0.68,drop:0.25,m:2,
+       ref:{E:'110',ys:'75',uts:'300',el:'68'}},
+  mg:{name:'Magnesium AZ31B (rolled)',type:'ro',E:45000,sy:220,sp:154,n:5.32,en:0.10,ef:0.155,drop:0.15,m:2,
+       ref:{E:'45',ys:'220',uts:'290',el:'15'}},
+  al1100:{name:'Pure aluminium 1100-O (annealed)',type:'ro',E:69000,sy:34,sp:17,n:3.48,en:0.32,ef:0.40,drop:0.3,m:2,
+       ref:{E:'69',ys:'34',uts:'90',el:'40'}},
+  ci:{name:'Gray cast iron G3000 (brittle)',type:'ro',E:100000,sy:300,sp:80,n:2.5,en:0.0043,ef:0.0043,drop:0,m:2,
+       ref:{E:'66–138',ys:'—',uts:'276',el:'<1'}}
+};
+function roStress(eps,M){ // invert eps = s/E + 0.002*((s-sp)/(sy-sp))^n by bisection
+  let lo=0,hi=M.E*eps;
+  for(let k=0;k<70;k++){const m=(lo+hi)/2;const pl=m>M.sp?0.002*Math.pow((m-M.sp)/(M.sy-M.sp),M.n):0;if(m/M.E+pl>eps)hi=m;else lo=m;}
+  return (lo+hi)/2;
+}
+function generate(key,noisy){
+  const M=MATERIALS[key],r=mulberry32(20261127);
+  const eY=M.type==='yp'?M.suy/M.E:M.sy/M.E+0.002;
+  const e1=Math.min(eY*4,M.ef*0.25),n1=260,n2=1400,e=[],s=[];
+  const f=x=>{let v;
+    if(M.type==='ro')v=roStress(x,M);
+    else{const eu=M.suy/M.E;
+      if(x<=eu)v=M.E*x;
+      else if(x<=eu+0.0003)v=lerp(M.suy,M.sly,(x-eu)/0.0003);
+      else if(x<=M.eL)v=M.sly+3*Math.sin((x-eu)*2600)+2*Math.sin((x-eu)*7100);
+      else v=M.sly+M.K*Math.pow(x-M.eL,M.nh);}
+    if(x>M.en)v*=1-M.drop*Math.pow((x-M.en)/(M.ef-M.en),M.m);
+    return v;};
+  for(let i=0;i<n1;i++){const x=e1*Math.pow(i/n1,2);e.push(x);s.push(f(x));}
+  for(let i=0;i<=n2;i++){const x=e1+(M.ef-e1)*i/n2;e.push(x);s.push(f(x));}
+  if(noisy){const mx=Math.max(...s),amp=0.0015*mx;for(let i=1;i<s.length;i++)s[i]+=amp*gauss(r);}
+  return {e,s};
+}
+function linfit(e,s,i0,i1){let n=i1-i0,sx=0,sy=0,sxx=0,sxy=0,syy=0;
+  for(let i=i0;i<i1;i++){const x=e[i],y=s[i];sx+=x;sy+=y;sxx+=x*x;sxy+=x*y;syy+=y*y;}
+  const dx=n*sxx-sx*sx,dy=n*syy-sy*sy;if(n<2||dx<=0)return null;
+  const m=(n*sxy-sx*sy)/dx,b=(sy-m*sx)/n,r2=dy>0?Math.pow(n*sxy-sx*sy,2)/(dx*dy):1;return {m,b,r2};}
+function linfitXY(e,s,i0,i1){const g=linfit(s,e,i0,i1);if(!g||g.m<=0)return null;return {m:1/g.m,b:-g.b/g.m,r2:g.r2};}
+function analyze(e,s,off,dig){
+  const FIT=dig?linfitXY:linfit,R2MIN=dig?0.9:0.99,SPAN=dig?0.3:0.15;
+  const n=e.length;let iU=0;for(let i=1;i<n;i++)if(s[i]>s[iU])iU=i;
+  let iF=n-1;for(let i=iU;i<n;i++){if(s[i]<0.1*s[iU]){iF=Math.max(iU,i-1);break;}}
+  const nPre=iU+1;let w=clamp(Math.round(nPre*0.02),3,30);if(nPre<w+1)w=Math.max(2,nPre-1);
+  let best=null;const st=Math.max(1,Math.floor(w/4));
+  // windows of at least w points AND at least 15% of UTS in stress span (robust to pixel steps in digitised data)
+  const span=SPAN*s[iU],W=[];
+  for(let a=0,b=0;a+w<=nPre;a+=st){if(b<a+w)b=a+w;while(b<nPre&&s[b-1]-s[a]<span)b++;if(s[b-1]-s[a]<span*0.5)break;W.push([a,b]);}
+  if(!W.length)for(let a=0;a+w<=nPre;a+=st)W.push([a,a+w]);
+  for(const [a,b] of W){const f=FIT(e,s,a,b);if(!f||f.m<=0)continue;if(f.r2>=R2MIN&&(!best||f.m>best.f.m))best={a,b,f};}
+  if(!best){for(const [a,b] of W){const f=FIT(e,s,a,b);if(!f||f.m<=0)continue;if(!best||f.m*f.r2>best.f.m*best.f.r2)best={a,b,f};}}
+  if(!best)return null;
+  let i0=best.a,i1=best.b,f=best.f;
+  const rs=(f,a,b)=>{let q=0;for(let i=a;i<b;i++){const d=s[i]-(f.m*e[i]+f.b);q+=d*d;}return Math.sqrt(q/Math.max(1,b-a-2));};
+  let sres=rs(f,i0,i1),fails=0,j=i1;
+  while(j<nPre){const r=Math.abs(s[j]-(f.m*e[j]+f.b)),tol=Math.max(3*sres,0.004*Math.abs(s[j]),1e-9);
+    if(r<=tol){fails=0;i1=j+1;j++;const g=FIT(e,s,i0,i1);if(g)f=g;}else{fails++;j++;if(fails>=3)break;}}
+  while(i0>0){const r=Math.abs(s[i0-1]-(f.m*e[i0-1]+f.b));if(r<=Math.max(3*sres,0.004*Math.abs(s[i0-1]),0.002*s[iU])){i0--;}else break;}
+  f=FIT(e,s,i0,i1)||f;sres=rs(f,i0,i1);
+  const E=f.m,e0=-f.b/f.m;
+  let iA=null,cnt=0;
+  for(let i=i0;i<=iU;i++){const fv=f.m*e[i]+f.b,dev=fv-s[i];if(fv>0&&dev>Math.max(0.005*fv,4*sres)){cnt++;if(cnt>=3){iA=i-2;break;}}else cnt=0;}
+  const g=x=>E*(x-e0-off);let eB=null,sB=null;
+  for(let i=Math.max(1,i0+1);i<=iF;i++){const d1=s[i-1]-g(e[i-1]),d2=s[i]-g(e[i]);if(d1>0&&d2<=0){const t=d1/(d1-d2);eB=e[i-1]+t*(e[i]-e[i-1]);sB=s[i-1]+t*(s[i]-s[i-1]);break;}}
+  let uy=null;
+  if(eB!=null){let im=0;for(let i=0;i<n&&e[i]<eB;i++)if(s[i]>s[im])im=i;if(s[im]>1.03*sB)uy={e:e[im],s:s[im]};}
+  let eA=iA!=null?e[iA]:null,sA=iA!=null?s[iA]:null;
+  if(eB!=null&&(eA==null||eA>eB)){sA=sB*0.85;eA=sA/E+e0;}
+  if(eA==null){eA=e[iU]*0.5;sA=s[Math.floor(iU/2)];}
+  const eU=e[iU],sU=s[iU],eF=e[iF],sF=s[iF],epl=Math.max(0,eF-sF/E);
+  let tough=0;for(let i=1;i<=iF;i++)tough+=(e[i]-e[i-1])*(s[i]+s[i-1])/2;
+  return {E,b:f.b,e0,i0,i1,r2:f.r2,sres,iA,eA,sA,eB,sB,uy,iU,eU,sU,iF,eF,sF,epl,EL:epl*100,
+    unif:Math.max(0,eU-sU/E)*100,tough,resil:sB!=null?sB*sB/(2*E):null,nH:Math.log(1+eU),trueU:sU*(1+eU),
+    yr:sB!=null?sB/sU:null,off,brittle:sB==null||epl*100<5};
+}
+//CORE-END
+
+/* ================= STATE ================= */
+const $=id=>document.getElementById(id);
+const easeIO=t=>t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;
+const easeOut=t=>1-Math.pow(1-t,3);
+const S={data:null,name:'',ref:null,res:null,digit:false,
+  shown:{E:0,Y:0,U:0,EL:0,R:0},prog:{E:0,Y:0,U:0,EL:0,R:0},
+  cur:0,reveal:Infinity,zoom:'full',playing:false,busy:false,tf:null};
+let C={};
+function readColors(){const g=getComputedStyle(document.documentElement);const v=n=>g.getPropertyValue(n).trim();
+  C={ink:v('--ink'),mute:v('--mute'),grid:v('--grid'),line:v('--line'),card:v('--card'),bg:v('--bg'),acc:v('--acc'),curve:v('--curve'),atom:v('--atom'),
+     m1:v('--metal1'),m2:v('--metal2'),el:v('--c-el'),yl:v('--c-yl'),pl:v('--c-pl'),nk:v('--c-nk'),fr:v('--c-fr')};}
+const fmt=(v,d=1)=>v==null||!isFinite(v)?'—':v.toLocaleString('en-IN',{minimumFractionDigits:d,maximumFractionDigits:d});
+function toast(msg){const t=$('toast');t.textContent=msg;t.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>t.classList.remove('on'),3200);}
+
+/* ================= DATA LOADING ================= */
+function loadData(e,s,name,ref,digit){
+  const P=[];for(let i=0;i<e.length;i++)if(isFinite(e[i])&&isFinite(s[i]))P.push([e[i],s[i]]);
+  P.sort((a,b)=>a[0]-b[0]||a[1]-b[1]);
+  if(P.length<10){toast('Need at least 10 valid data points.');return false;}
+  const ee=P.map(p=>p[0]),ss=P.map(p=>p[1]);
+  const res=analyze(ee,ss,S.off(),!!digit);
+  if(!res){toast('Could not find a linear elastic region in this data.');return false;}
+  stopPlay();
+  S.data={e:ee,s:ss};S.name=name;S.ref=ref;S.res=res;S.digit=!!digit;
+  resetSteps(true);
+  S.cur=t2e(0.42);syncSlider();
+  $('plotTitle').textContent='Engineering stress–strain curve · '+name;
+  addLog(`Loaded <b>${esc(name)}</b>: ${ee.length} points, strain 0–${fmt(ee[ee.length-1]*100,1)} %, max stress ${fmt(Math.max(...ss),0)} MPa.`);
+  render();return true;
+}
+S.off=()=>clamp((+$('off').value||0.2)/100,0.0001,0.05);
+function loadSample(){const k=$('mat').value,M=MATERIALS[k];const d=generate(k,$('noise').checked);loadData(d.e,d.s,M.name,M.ref,false);}
+function esc(t){return String(t).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function parseRows(text){const rows=[];for(const ln of text.split(/\r?\n/)){const t=ln.trim();if(!t)continue;const p=t.split(/[,;\t ]+/).map(Number);if(p.length>=2&&p.every(Number.isFinite))rows.push(p);}return rows;}
+function importRows(rows,label){
+  const cx=(+$('colX').value||1)-1,cy=(+$('colY').value||2)-1,mode=$('imode').value;const e=[],s=[];
+  const sm={MPa:1,GPa:1000,ksi:6.894757,psi:0.006894757}[$('uS').value];
+  let pct=$('uE').value==='pct';
+  if(mode==='ss'&&!pct){let mx=0;for(const r of rows)if(r.length>cx)mx=Math.max(mx,r[cx]);if(mx>2){pct=true;toast('Strain values above 2 – treating them as %.');}}
+  for(const r of rows){if(r.length<=Math.max(cx,cy))continue;let x=r[cx],y=r[cy];
+    if(mode==='load'){const F=y*($('uL').value==='kN'?1000:1);x=x/(+$('l0').value||50);y=F/(+$('a0').value||1);}
+    else{if(pct)x/=100;y*=sm;}
+    e.push(x);s.push(y);}
+  if(loadData(e,s,label,null,false))toast('Data loaded – press the step buttons.');
+}
+
+/* ================= SLIDER MAPPING ================= */
+function knot(){const R=S.res;return Math.min(R.eF*0.5,(R.eB!=null?R.eB:R.eA)*1.6);}
+function t2e(t){const R=S.res,a=knot();return t<=0.22?a*(t/0.22):a+(R.eF-a)*((t-0.22)/0.78);}
+function e2t(x){const R=S.res,a=knot();return x<=a?0.22*x/a:0.22+0.78*(x-a)/((R.eF-a)||1);}
+function syncSlider(){$('slider').value=Math.round(e2t(S.cur)*1000);}
+function sAt(x){const e=S.data.e,s=S.data.s,n=S.res.iF;if(x<=e[0])return s[0];if(x>=e[n])return s[n];
+  let lo=0,hi=n;while(hi-lo>1){const m=(lo+hi)>>1;if(e[m]<=x)lo=m;else hi=m;}const t=(x-e[lo])/((e[hi]-e[lo])||1);return s[lo]+t*(s[hi]-s[lo]);}
+function regionAt(x){const R=S.res;if(!R)return 'elastic';if(x>=R.eF-1e-12&&x>0)return 'fracture';if(R.brittle)return x>R.eA?'brittle':'elastic';if(x>R.eU)return 'necking';
+  if(R.eB!=null&&x>R.eB)return 'plastic';if(x>R.eA)return 'yield';return 'elastic';}
+const RCOL=r=>({elastic:C.el,yield:C.yl,plastic:C.pl,necking:C.nk,brittle:C.nk,fracture:C.fr})[r];
+
+/* ================= DRAW HELPERS ================= */
+function fitCanvas(cv){const r=cv.getBoundingClientRect(),d=window.devicePixelRatio||1,w=Math.max(10,r.width),h=Math.max(10,r.height);
+  if(cv.width!==Math.round(w*d)||cv.height!==Math.round(h*d)){cv.width=Math.round(w*d);cv.height=Math.round(h*d);}
+  const c=cv.getContext('2d');c.setTransform(d,0,0,d,0,0);return {c,w,h};}
+function nice(x){const p=Math.pow(10,Math.floor(Math.log10(x))),f=x/p;return (f<1.5?1:f<3?2:f<7?5:10)*p;}
+function tag(c,x,y,txt,col,box,align){c.font='600 12px Inter,sans-serif';const tw=c.measureText(txt).width+10,th=20;
+  let lx=align==='right'?x-tw-6:x+6,ly=y-th-4;
+  lx=clamp(lx,box.l+2,box.r-tw-2);ly=clamp(ly,box.t+2,box.b-th-2);
+  c.fillStyle=C.card;c.globalAlpha=0.92;c.fillRect(lx,ly,tw,th);c.globalAlpha=1;c.strokeStyle=col;c.lineWidth=1;c.strokeRect(lx+.5,ly+.5,tw-1,th-1);
+  c.fillStyle=col;c.textBaseline='middle';c.textAlign='left';c.fillText(txt,lx+5,ly+th/2+.5);}
+function dot(c,x,y,col,r=5){c.beginPath();c.arc(x,y,r,0,7);c.fillStyle=col;c.fill();c.lineWidth=2;c.strokeStyle=C.card;c.stroke();}
+function arrowH(c,x1,x2,y,col,label){c.strokeStyle=col;c.fillStyle=col;c.lineWidth=1.5;c.beginPath();c.moveTo(x1,y);c.lineTo(x2,y);c.stroke();
+  const hd=(x,dir)=>{c.beginPath();c.moveTo(x,y);c.lineTo(x-6*dir,y-4);c.lineTo(x-6*dir,y+4);c.fill();};if(Math.abs(x2-x1)>14){hd(x2,1);hd(x1,-1);}
+  if(label){c.font='600 12px Inter,sans-serif';c.textAlign='center';c.textBaseline='bottom';c.fillText(label,(x1+x2)/2,y-4);}}
+
+function elasticRange(){const R=S.res,e=S.data.e,s=S.data.s;
+  let xr=Math.max((R.eB!=null?R.eB:R.eA*1.5)*2.2,R.e0+R.off*2.5);xr=Math.min(xr,R.eF);
+  let ym=0;for(let i=0;i<=R.iF&&e[i]<=xr;i++)ym=Math.max(ym,s[i]);
+  return [xr,Math.max(ym*1.2,(R.sB||R.sA)*1.25)];}
+
+function drawScene(c,box,xr,yr,inset){
+  const R=S.res,e=S.data.e,s=S.data.s;const X=v=>box.l+v/xr*box.w,Y=v=>box.b-v/yr*box.h;
+  // grid + ticks
+  const xs=nice(xr/(inset?4:7)),ys=nice(yr/(inset?4:6));
+  c.font=(inset?'11px':'12px')+' Inter,sans-serif';c.fillStyle=C.mute;c.strokeStyle=C.grid;c.lineWidth=1;
+  const xd=Math.max(0,-Math.floor(Math.log10(xs*100)+1e-9));
+  for(let v=0;v<=xr*1.0001;v+=xs){const x=X(v);c.beginPath();c.moveTo(x,box.t);c.lineTo(x,box.b);c.stroke();
+    c.textAlign='center';c.textBaseline='top';c.fillText((v*100).toFixed(xd),x,box.b+5);}
+  for(let v=0;v<=yr*1.0001;v+=ys){const y=Y(v);c.beginPath();c.moveTo(box.l,y);c.lineTo(box.r,y);c.stroke();
+    c.textAlign='right';c.textBaseline='middle';c.fillText(Math.round(v),box.l-6,y);}
+  c.strokeStyle=C.mute;c.lineWidth=1.2;c.beginPath();c.moveTo(box.l,box.t);c.lineTo(box.l,box.b);c.lineTo(box.r,box.b);c.stroke();
+  c.save();c.beginPath();c.rect(box.l,box.t-2,box.w+2,box.h+2);c.clip();
+  // regions
+  if(S.shown.R){const a=S.prog.R;const bands=R.brittle?[[0,R.eA,C.el,'Elastic'],[R.eA,R.eF,C.nk,'Non-linear · no yield point']]:[[0,R.eA,C.el,'Elastic'],[R.eA,R.eB!=null?R.eB:R.eA,C.yl,'Yielding'],[R.eB!=null?R.eB:R.eA,R.eU,C.pl,'Uniform plastic · strain hardening'],[R.eU,R.eF,C.nk,'Necking']];
+    for(const [x0,x1,col,lb] of bands){if(x1<=x0)continue;const px0=X(x0),px1=X(x1);c.globalAlpha=0.13*a;c.fillStyle=col;c.fillRect(px0,box.t,px1-px0,box.h);
+      c.globalAlpha=a;c.fillStyle=col;c.font='600 12px Inter,sans-serif';const tw=c.measureText(lb).width;
+      if(!inset&&px1-px0>tw+10){c.textAlign='center';c.textBaseline='top';c.fillText(lb,(px0+px1)/2,box.t+6);}}
+    c.globalAlpha=1;}
+  // true curve
+  if($('trueC').checked&&!inset){c.setLineDash([6,4]);c.strokeStyle=C.acc;c.lineWidth=2;c.beginPath();
+    for(let i=0;i<=R.iU;i++){const x=X(Math.log(1+e[i])),y=Y(s[i]*(1+e[i]));i?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();c.setLineDash([]);
+    const xu=X(Math.log(1+R.eU)),yu=Y(R.trueU);dot(c,xu,yu,C.acc,4);tag(c,xu,yu,'True σ–ε (to UTS)',C.acc,box,'right');}
+  // curve
+  c.strokeStyle=C.curve;c.lineWidth=inset?1.8:2.4;c.lineJoin='round';c.beginPath();let st=false;
+  for(let i=0;i<=R.iF;i++){if(e[i]>S.reveal)break;if(e[i]>xr*1.02)break;const x=X(e[i]),y=Y(s[i]);st?c.lineTo(x,y):(c.moveTo(x,y),st=true);}
+  if(S.reveal<R.eF&&S.reveal<xr){c.lineTo(X(S.reveal),Y(sAt(S.reveal)));}
+  c.stroke();
+  const top=Math.min(yr*0.97,(R.sB||R.sU)*1.3);
+  // E
+  if(S.shown.E){const p=S.prog.E;c.strokeStyle=C.el;c.lineWidth=inset?4:5;c.globalAlpha=0.45;c.beginPath();
+    for(let i=R.i0;i<R.i1;i++){const x=X(e[i]),y=Y(s[i]);i>R.i0?c.lineTo(x,y):c.moveTo(x,y);}c.stroke();c.globalAlpha=1;
+    const sEnd=top*p;c.strokeStyle=C.el;c.lineWidth=1.6;c.beginPath();c.moveTo(X(R.e0),Y(0));c.lineTo(X(R.e0+sEnd/R.E),Y(sEnd));c.stroke();
+    const xa=X(R.e0+(R.sB||R.sU)*0.25/R.E),xb=X(R.e0+(R.sB||R.sU)*0.55/R.E);
+    if(xb-xa>14&&p>0.95){const ya=Y((R.sB||R.sU)*0.25),yb=Y((R.sB||R.sU)*0.55);c.strokeStyle=C.el;c.lineWidth=1.2;c.beginPath();c.moveTo(xa,ya);c.lineTo(xb,ya);c.lineTo(xb,yb);c.stroke();
+      c.fillStyle=C.el;c.font='600 11px Inter,sans-serif';c.textAlign='center';c.textBaseline='top';c.fillText('Δε',(xa+xb)/2,ya+3);c.textAlign='left';c.textBaseline='middle';c.fillText('Δσ',xb+4,(ya+yb)/2);}
+    if(p>0.95){const lx=X(R.e0+top*0.62/R.E),ly=Y(top*0.62);if(!inset)tag(c,lx,ly,'E = slope = '+fmt(R.E/1000,1)+' GPa',C.el,box);
+      if(R.sA!=null){const x=X(R.eA),y=Y(R.sA);dot(c,x,y,C.el,4);if(!inset)tag(c,x,y+28,'A  proportional limit',C.el,box);}}}
+  // offset
+  if(S.shown.Y&&R.eB!=null){const p=S.prog.Y,k=Math.min(1,p/0.6),o=R.off*k;c.strokeStyle=C.yl;c.lineWidth=1.8;c.setLineDash([7,5]);
+    c.beginPath();c.moveTo(X(R.e0+o),Y(0));c.lineTo(X(R.e0+o+top/R.E),Y(top));c.stroke();c.setLineDash([]);
+    const bx0=X(R.e0),bx1=X(R.e0+o);if(bx1-bx0>3){arrowH(c,bx0,bx1,box.b-12,C.yl,(inset||bx1-bx0<40)?'':(R.off*100).toFixed(2).replace(/0$/,'')+'% offset');}
+    if(p>0.6){const q=(p-0.6)/0.4,x=X(R.eB),y=Y(R.sB);
+      if(q<1){c.strokeStyle=C.yl;c.globalAlpha=1-q;c.lineWidth=2;c.beginPath();c.arc(x,y,6+q*22,0,7);c.stroke();c.globalAlpha=1;}
+      dot(c,x,y,C.yl,5.5);tag(c,x,y,(inset?'B  σy = ':'B  0.2% yield σy = ')+fmt(R.sB,0)+' MPa',C.yl,box);
+      if(R.uy&&!inset){const ux=X(R.uy.e),uy=Y(R.uy.s);dot(c,ux,uy,C.yl,4);tag(c,ux,uy-6,'Upper yield '+fmt(R.uy.s,0),C.yl,box,'right');}}}
+  // UTS
+  if(S.shown.U&&!inset&&R.eU<=xr){const p=S.prog.U,x=X(R.eU),y=Y(R.sU);c.strokeStyle=C.nk;c.lineWidth=1.2;c.setLineDash([4,4]);
+    c.beginPath();c.moveTo(box.l,y);c.lineTo(lerp(box.l,x,p),y);c.moveTo(x,y);c.lineTo(x,lerp(y,box.b,p));c.stroke();c.setLineDash([]);
+    if(p>0.9){dot(c,x,y,C.nk,6);tag(c,x,y,'D  UTS = '+fmt(R.sU,0)+' MPa',C.nk,box,x>box.l+box.w*0.6?'right':'left');}}
+  // Elongation
+  if(S.shown.EL&&!inset&&R.eF<=xr){const p=S.prog.EL,xf=X(R.eF),yf=Y(R.sF),xp=X(R.epl);
+    c.strokeStyle=C.fr;c.lineWidth=1.6;c.setLineDash([6,4]);c.beginPath();c.moveTo(xf,yf);c.lineTo(lerp(xf,xp,p),lerp(yf,box.b,p));c.stroke();c.setLineDash([]);
+    dot(c,xf,yf,C.fr,6);
+    if(p>0.9){tag(c,xf,yf,'X  fracture',C.fr,box,'right');arrowH(c,X(0),xp,box.b-30,C.fr,'%EL = '+fmt(R.EL,1)+' %');
+      if(xf-xp>8){arrowH(c,xp,xf,box.b-12,C.mute,xf-xp>60?'elastic recovery':'');}}}
+  c.restore();
+  return {X,Y};
+}
+
+function drawPlot(){
+  const cv=$('cvPlot');const {c,w,h}=fitCanvas(cv);c.clearRect(0,0,w,h);if(!S.data)return;
+  const R=S.res;const box={l:58,t:14,r:w-12,b:h-42};box.w=box.r-box.l;box.h=box.b-box.t;
+  let xr,yr;if(S.zoom==='elastic'){[xr,yr]=elasticRange();}else{xr=R.eF*1.06;yr=Math.max(R.sU,$('trueC').checked?R.trueU:0)*1.14;}
+  const {X,Y}=drawScene(c,box,xr,yr,false);S.tf={box,xr,yr};
+  c.fillStyle=C.mute;c.font='12px Inter,sans-serif';c.textAlign='center';c.textBaseline='bottom';c.fillText('Engineering strain ε (%)',box.l+box.w/2,h-2);
+  c.save();c.translate(13,box.t+box.h/2);c.rotate(-Math.PI/2);c.textBaseline='middle';c.fillText('Stress σ (MPa)',0,0);c.restore();
+  // inset
+  if(S.zoom==='full'&&$('inset').checked&&(S.shown.E||S.shown.Y)&&w>420&&R.eF>0.02){
+    const iw=Math.min(250,box.w*0.42),ih=Math.min(170,box.h*0.42);const ib={l:box.l+box.w*0.5-iw*0.1,t:box.t+box.h*0.42};
+    ib.l=Math.min(ib.l,box.r-iw-6);ib.r=ib.l+iw;ib.b=ib.t+ih;
+    c.fillStyle=C.card;c.strokeStyle=C.line;c.lineWidth=1;c.fillRect(ib.l-40,ib.t-22,iw+48,ih+42);c.strokeRect(ib.l-40+.5,ib.t-22+.5,iw+48,ih+42);
+    c.fillStyle=C.mute;c.font='600 11px Inter,sans-serif';c.textAlign='left';c.textBaseline='top';c.fillText('Zoom on elastic region',ib.l-34,ib.t-18);
+    ib.t+=4;ib.w=ib.r-ib.l;ib.h=ib.b-ib.t;const [ex,ey]=elasticRange();drawScene(c,ib,ex,ey,true);}
+  // cursor
+  if(S.cur>0&&!S.busy){const x=X(Math.min(S.cur,xr)),y=Y(sAt(S.cur));if(S.cur<=xr){c.strokeStyle=C.mute;c.globalAlpha=0.5;c.lineWidth=1;c.beginPath();c.moveTo(x,box.t);c.lineTo(x,box.b);c.stroke();c.globalAlpha=1;
+    dot(c,x,y,RCOL(regionAt(S.cur)),6.5);}}
+}
+
+/* ================= SPECIMEN ================= */
+function drawSpec(){
+  const {c,w,h}=fitCanvas($('cvSpec'));c.clearRect(0,0,w,h);if(!S.res)return;
+  const R=S.res,x=S.cur,fr=regionAt(x)==='fracture';const sig=fr?0:sAt(x);
+  const grip=Math.min(46,w*0.11),sh=16,avail=w-2*grip-2*sh-70,L0=Math.min(170,avail/(1+R.eF));
+  const L=fr?L0*(1+R.epl):L0*(1+x);const cy=h/2+8,W0=30,gH=58;
+  const wU=W0/Math.sqrt(1+Math.min(x,R.eU));const q=!R.brittle&&x>R.eU?clamp((x-R.eU)/(R.eF-R.eU),0,1):0;
+  const total=2*grip+2*sh+L+(fr?12:0),x0=(w-total)/2;const gx0=x0+grip+sh,gx1=gx0+L+(fr?12:0),xc=gx0+L/2+(fr?6:0);
+  const hw=xx=>{let v=wU/2;if(q>0)v*=1-0.55*Math.pow(q,1.1)*Math.exp(-(((xx-xc)/(0.1*L))**2));return v;};
+  const grd=c.createLinearGradient(0,cy-gH/2,0,cy+gH/2);grd.addColorStop(0,C.m1);grd.addColorStop(0.5,C.m2);grd.addColorStop(1,C.m1);
+  function piece(xa,xb,leftEnd,rightEnd,brk){ // xa..xb gauge range in "unbroken" coords, then shifted
+    c.beginPath();const pts=[];
+    if(leftEnd){pts.push([x0,cy-gH/2],[x0+grip,cy-gH/2]);}
+    const N=60;for(let i=0;i<=N;i++){const xx=lerp(xa,xb,i/N);pts.push([xx,cy-hw(xx)]);}
+    if(rightEnd){pts.push([gx1+sh,cy-gH/2],[x0+total,cy-gH/2],[x0+total,cy+gH/2],[gx1+sh,cy+gH/2]);}
+    else if(brk){pts.push([xb+brk,cy]);}
+    for(let i=N;i>=0;i--){const xx=lerp(xa,xb,i/N);pts.push([xx,cy+hw(xx)]);}
+    if(leftEnd){pts.push([x0+grip,cy+gH/2],[x0,cy+gH/2]);}else if(brk){pts.push([xa+brk,cy]);}
+    pts.forEach((p,i)=>i?c.lineTo(p[0],p[1]):c.moveTo(p[0],p[1]));c.closePath();c.fillStyle=grd;c.fill();c.strokeStyle=C.mute;c.lineWidth=1;c.stroke();}
+  if(!fr)piece(gx0,gx1,true,true);
+  else{const bk=R.brittle?0:5;piece(gx0,xc-6,true,false,bk);piece(xc+6,gx1,false,true,bk);}
+  // grips hatch
+  c.fillStyle=C.mute;c.globalAlpha=0.25;c.fillRect(x0,cy-gH/2,grip,gH);c.fillRect(x0+total-grip,cy-gH/2,grip,gH);c.globalAlpha=1;
+  // gauge marks + labels
+  c.strokeStyle=C.acc;c.fillStyle=C.acc;c.lineWidth=1.4;const ty=cy-gH/2-6;
+  c.beginPath();c.moveTo(gx0,ty-6);c.lineTo(gx0,cy-hw(gx0));c.moveTo(gx1,ty-6);c.lineTo(gx1,cy-hw(gx1));c.stroke();
+  arrowH(c,gx0,gx1,ty,C.acc,'L = '+fmt(50*(fr?1+R.epl:1+x),2)+' mm');
+  // force arrows
+  if(!fr&&sig>0){const len=8+34*sig/R.sU;c.strokeStyle=C.fr;c.fillStyle=C.fr;c.lineWidth=3;
+    [[x0-4,-1],[x0+total+4,1]].forEach(([ax,d])=>{c.beginPath();c.moveTo(ax,cy);c.lineTo(ax+d*len,cy);c.stroke();c.beginPath();c.moveTo(ax+d*(len+8),cy);c.lineTo(ax+d*len,cy-6);c.lineTo(ax+d*len,cy+6);c.fill();});
+    c.font='600 12px Inter,sans-serif';c.textAlign='center';c.textBaseline='top';c.fillText('F',x0-14,cy+8);c.fillText('F',x0+total+14,cy+8);}
+  c.fillStyle=C.mute;c.font='12px Inter,sans-serif';c.textAlign='center';c.textBaseline='bottom';
+  const msg=fr?(R.brittle?'Brittle break: flat fracture, almost no permanent stretch':'Broken: elastic strain recovered, cup-and-cone halves'):R.brittle?(x>R.eA?'Microcracks grow inside; no visible neck':'Elastic: stretch is tiny and fully recoverable'):q>0?'Neck forms at the weakest section':x>R.eA?'Uniform plastic stretching, width shrinks evenly':'Elastic: stretch is tiny and fully recoverable';
+  c.fillText(msg,w/2,h-2);
+}
+
+/* ================= LATTICE ================= */
+const NX=16,NY=12,XOB=NX-4.5,V1=[5.2,4.4],V2=[10.4,6.6];
+function latState(x){
+  const R=S.res,fr=regionAt(x)==='fracture',sig=fr?0:sAt(x),D=[];
+  const eB=R.eB!=null?R.eB:R.eA*1.2;
+  const glide=(p,u)=>{if(u<=0)return;if(u>=1)D.push({full:1,p});else D.push({x:lerp(-2,NX+1,u),p,core:1});};
+  let p2=0,nPile=0;
+  if(x>R.eA&&!R.brittle){glide(5,clamp((x-R.eA)/Math.max(1e-12,eB-R.eA),0,1));
+    p2=x>eB?clamp((x-eB)/Math.max(1e-12,R.eU-eB),0,1):0;glide(9,clamp(p2/0.15,0,1));
+    const piles=[[2,0],[7,0],[2,1],[7,1],[2,2],[7,2]];
+    piles.forEach(([p,r],k)=>{const t0=0.12+k*0.13;if(p2>t0){const u=clamp((p2-t0)/0.14,0,1);D.push({x:lerp(-2,XOB-[0.9,2.2,3.9][r],easeOut(u)),p,core:1});if(u>=1)nPile++;}});}
+  const q=R.brittle?(x>R.eA?clamp((x-R.eA)/(R.eF-R.eA),0,1)*0.8:0):x>R.eU?clamp((x-R.eU)/(R.eF-R.eU),0,1):0;
+  return {sig,fr,D,q,p2,nPile,es:fr?0:0.045*sig/R.sU};
+}
+function drawLat(){
+  const {c,w,h}=fitCanvas($('cvLat'));c.clearRect(0,0,w,h);if(!S.res)return;
+  const R=S.res,st=latState(S.cur);const a=Math.min((w-110)/(NX+1),(h-80)/(NY+1));const ox=w/2,oy=h/2+4;
+  const nx=Math.SQRT1_2,ny=-Math.SQRT1_2; // load axis (up-right on screen)
+  const lineY=xx=>V1[1]+(xx-V1[0])*(V2[1]-V1[1])/(V2[0]-V1[0]);
+  const vr=st.q>0.03?0.25+1.05*Math.pow(st.q,1.3):0;
+  const toScr=(lx,ly,side)=>{let px=ox+(lx-(NX-1)/2)*a,py=oy-(ly-(NY-1)/2)*a;const dx=px-ox,dy=py-oy,d=dx*nx+dy*ny,d2=dx*nx-dy*ny;
+    px+=st.es*d*nx-0.3*st.es*d2*nx;py+=st.es*d*ny+0.3*st.es*d2*ny;
+    if(st.fr&&side!=null){const sep=side?0.55*a:-0.55*a;px+=sep*nx;py+=sep*ny;}return [px,py];};
+  const segD=(px,py)=>{const ax=V2[0]-V1[0],ay=V2[1]-V1[1];let t=((px-V1[0])*ax+(py-V1[1])*ay)/(ax*ax+ay*ay);t=clamp(t,0,1);return Math.hypot(px-V1[0]-t*ax,py-V1[1]-t*ay);};
+  const P=[];
+  for(let j=0;j<NY;j++){P[j]=[];for(let i=0;i<NX;i++){let lx=i,ly=j;
+    for(const d of st.D){lx+=d.full?(j>d.p?0.5:-0.5):Math.atan2(j-d.p-0.5,i-d.x)/(2*Math.PI);} // edge dislocation field u = (b/2π)·atan2(y,x)
+    let gone=false;if(vr>0){if(Math.hypot(lx-V1[0],ly-V1[1])<vr||Math.hypot(lx-V2[0],ly-V2[1])<vr*0.85)gone=true;
+      if(st.q>0.75&&segD(lx,ly)<0.55*(st.q-0.75)/0.25)gone=true;}
+    const side=st.fr?(ly>lineY(lx)):null;
+    
+    P[j][i]=gone?null:{s:toScr(lx,ly,side),side};}}
+  // bonds
+  c.lineWidth=1.6;
+  const bond=(A,B)=>{if(!A||!B||A.side!==B.side)return;const L=Math.hypot(A.s[0]-B.s[0],A.s[1]-B.s[1])/a-1;if(L>0.6)return;
+    const m=clamp(Math.abs(L)/0.22,0,1);c.strokeStyle=L>0?`rgba(220,38,38,${0.25+0.75*m})`:`rgba(37,99,235,${0.25+0.75*m})`;if(m<0.08)c.strokeStyle=C.line;
+    c.beginPath();c.moveTo(A.s[0],A.s[1]);c.lineTo(B.s[0],B.s[1]);c.stroke();};
+  for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){const A=P[j][i];if(!A)continue;if(i+1<NX)bond(A,P[j][i+1]);
+    if(j+1<NY){let B=null,bd=1e9;for(let k=Math.max(0,i-2);k<=Math.min(NX-1,i+2);k++){const Q=P[j+1][k];if(!Q||Q.side!==A.side)continue;const dd=Math.hypot(Q.s[0]-A.s[0],Q.s[1]-A.s[1]);if(dd<bd){bd=dd;B=Q;}}
+      if(B&&bd<1.4*a)bond(A,B);}}
+  // slip planes
+  const act=new Set(st.D.map(d=>d.p));c.setLineDash([3,4]);c.strokeStyle=C.pl;c.lineWidth=1.2;
+  act.forEach(p=>{const A=toScr(-0.6,p+0.5),B=toScr(NX-0.4,p+0.5);c.beginPath();c.moveTo(A[0],A[1]);c.lineTo(B[0],B[1]);c.stroke();});c.setLineDash([]);
+  // atoms
+  const r=a*0.27;c.fillStyle=C.atom;
+  for(let j=0;j<NY;j++)for(let i=0;i<NX;i++){const A=P[j][i];if(!A)continue;c.beginPath();c.arc(A.s[0],A.s[1],r,0,7);c.fill();}
+  // obstacles
+  [2,7].forEach(p=>{const [px,py]=toScr(XOB,p+0.5);c.beginPath();c.arc(px,py,a*0.5,0,7);c.fillStyle=C.ink;c.fill();});
+  // dislocation cores
+  c.strokeStyle=C.fr;c.lineWidth=3.2;
+  st.D.filter(d=>d.core&&d.x>-0.8&&d.x<NX-0.2).forEach(d=>{const [px,py]=toScr(d.x,d.p+0.5);const s=a*0.5;
+    c.beginPath();c.moveTo(px-s,py+s*0.35);c.lineTo(px+s,py+s*0.35);c.moveTo(px,py+s*0.35);c.lineTo(px,py-s*0.9);c.stroke();});
+  // voids
+  if(vr>0){c.strokeStyle=C.nk;c.lineWidth=1.5;c.setLineDash([3,3]);[[V1,vr],[V2,vr*0.85]].forEach(([v,rr])=>{const [px,py]=toScr(v[0],v[1],st.fr?(v[1]>lineY(v[0])):null);c.beginPath();c.arc(px,py,rr*a,0,7);c.stroke();});c.setLineDash([]);}
+  // load arrows
+  const corner=(i,j)=>toScr(i,j);
+  if(st.sig>0){const len=14+40*st.sig/R.sU;const tr=corner(NX-1,NY-1),bl=corner(0,0);c.strokeStyle=C.fr;c.fillStyle=C.fr;c.lineWidth=3;
+    [[tr,1],[bl,-1]].forEach(([p,d])=>{const sx=p[0]+d*14*nx,sy=p[1]+d*14*ny,ex=sx+d*len*nx,ey=sy+d*len*ny;c.beginPath();c.moveTo(sx,sy);c.lineTo(ex,ey);c.stroke();
+      const hx=ex+d*9*nx,hy=ey+d*9*ny;c.beginPath();c.moveTo(hx,hy);c.lineTo(ex-6*ny*d,ey+6*nx*d);c.lineTo(ex+6*ny*d,ey-6*nx*d);c.fill();});
+    c.font='600 12px Inter,sans-serif';c.textAlign='left';c.textBaseline='bottom';c.fillText('σ',Math.min(tr[0]+18,w-14),Math.max(tr[1]-18,14));}
+  // legend
+  c.font='11.5px Inter,sans-serif';c.textAlign='left';c.textBaseline='bottom';c.fillStyle=C.mute;
+  c.fillText('⊥ edge dislocation   ● obstacle   ⋯ active slip plane (45° to load)',8,h-2);
+}
+
+/* ================= INFO PANEL ================= */
+const TXT={
+  elastic:['Elastic region (O → A)','Atoms are pulled slightly apart but stay on their lattice sites. The bonds behave like springs, so stress is proportional to strain. Remove the load and the specimen returns to its original length. No dislocations move.',R=>`Hooke's law: σ = Eε, &nbsp; E = ${fmt(R.E/1000,1)} GPa`],
+  yield:['Yielding (A → B)','The shear stress resolved on the slip planes reaches the critical value (τ<sub>CRSS</sub>). The first dislocations start to glide and leave a slip step: the first permanent strain. Because this start is gradual, yield strength is defined by the 0.2% offset line.',R=>`Schmid: τ<sub>R</sub> = σ cosφ cosλ; at 45°, τ<sub>R</sub> = 0.5σ &nbsp;·&nbsp; σ<sub>y</sub> = ${fmt(R.sB,0)} MPa`],
+  plastic:['Uniform plastic flow, strain hardening (B → D)','Dislocations multiply and pile up against obstacles such as precipitates and grain boundaries. Their stress fields push back on new dislocations, so a higher stress is needed to keep deforming. The whole gauge length stretches evenly and its cross-section shrinks uniformly.',R=>`Taylor: σ = σ₀ + MαGb√ρ &nbsp;·&nbsp; n ≈ ln(1+ε<sub>u</sub>) = ${fmt(R.nH,2)}`],
+  necking:['Necking (D → X)','Past the UTS, strain hardening can no longer make up for the shrinking area, so deformation concentrates in one neck. Engineering stress (load ÷ original area) falls, though the true stress in the neck keeps rising. Microvoids form at inclusions in the neck and grow.',R=>`Considère: dσ<sub>T</sub>/dε<sub>T</sub> = σ<sub>T</sub> at UTS = ${fmt(R.sU,0)} MPa`],
+  brittle:['Non-linear, no yield point (A → X)','In gray cast iron, graphite flakes act as tiny built-in cracks. As the load rises they open and grow, so the curve bends even though few dislocations move. The 0.2% offset line never meets the curve: there is no yield strength, and the metal gives almost no warning before it breaks.',R=>`UTS ≈ fracture stress = ${fmt(R.sU,0)} MPa &nbsp;·&nbsp; %EL = ${fmt(R.EL,1)} %`],
+  fracture:['Fracture (X)','The voids join into a crack that runs across the neck, giving a ductile cup-and-cone fracture. The elastic part of the strain (σ<sub>f</sub>/E) springs back when the halves separate, so % elongation counts only the plastic strain.',R=>`%EL = (ε<sub>f</sub> − σ<sub>f</sub>/E) × 100 = ${fmt(R.EL,1)} %`]
+};
+let lastInfo='';
+function updInfo(){
+  if(!S.res)return;const R=S.res,x=S.cur,rg=regionAt(x),st=latState(x);const sig=rg==='fracture'?R.sF:sAt(x);
+  $('readout').textContent=`ε = ${fmt(x*100,x<0.02?3:2)} %   σ = ${fmt(sig,0)} MPa`;
+  let lr=R.brittle?10:x<=R.eA?10:rg==='necking'||rg==='fracture'?14+Math.min(1,st.q):10+4*Math.pow(st.p2||0.0001,0.6);if(rg==='yield')lr=10.3;
+  const rho=Math.pow(10,lr),ex=Math.floor(lr),mant=rho/Math.pow(10,ex);
+  $('chips').innerHTML=`<span class="chip">τ<sub>R</sub> = 0.5σ = ${fmt(0.5*(rg==='fracture'?0:sig),0)} MPa</span><span class="chip">ρ ≈ ${mant.toFixed(1)}×10<sup>${ex}</sup> m⁻² (illustrative)</span>`+(st.nPile?`<span class="chip">${st.nPile} dislocations piled up</span>`:'')+(st.q>0.03?`<span class="chip">${R.brittle?'microcracks growing':'voids growing'}</span>`:'');
+  const key=rg+'|'+(R.uy?1:0)+fmt(R.E)+fmt(R.sB);if(key===lastInfo)return;lastInfo=key;
+  let T=TXT[rg];let extra='';if(rg==='fracture'&&R.brittle)T=['Brittle fracture (X)','A crack runs straight across the section (cleavage) with no neck. The broken halves fit back together almost perfectly, so the permanent stretch is tiny.',TXT.fracture[2]];
+  if(rg==='yield'&&R.uy)extra='<p class="note">Mild steel shows an upper and lower yield point: carbon and nitrogen atoms pin dislocations (Cottrell atmospheres). Once dislocations break free the stress drops, and Lüders bands sweep along the gauge length.</p>';
+  $('explain').innerHTML=`<span class="tag" style="background:${RCOL(rg)}">${rg==='plastic'?'strain hardening':rg}</span><h3>${T[0]}</h3><p>${T[1]}</p><div class="formula">${T[2](R)}</div>${extra}`;
+}
+
+/* ================= TABLE / LOG ================= */
+function table(){
+  const R=S.res,f=S.shown,ref=S.ref;if(!R)return;
+  const rows=[
+    ['Modulus of elasticity, E','GPa',f.E?fmt(R.E/1000,1):null,ref&&ref.E],
+    ['Proportional limit (A)','MPa',f.E?fmt(R.sA,0):null,null],
+    [`Yield strength, ${(R.off*100).toFixed(2).replace(/0$/,'')}% offset (B)`,'MPa',f.Y?(R.sB!=null?fmt(R.sB,0):'none'):null,ref&&ref.ys],
+    ...(R.uy?[['Upper yield point','MPa',f.Y?fmt(R.uy.s,0):null,null]]:[]),
+    ['Ultimate tensile strength (D)','MPa',f.U?fmt(R.sU,0):null,ref&&ref.uts],
+    ['Uniform elongation','%',f.U?fmt(R.unif,1):null,null],
+    ['% Elongation at fracture','%',f.EL?fmt(R.EL,1):null,ref&&ref.el],
+    ['Fracture stress (X)','MPa',f.EL?fmt(R.sF,0):null,null],
+    ['Yield / UTS ratio','–',f.Y&&f.U&&R.yr?fmt(R.yr,2):null,null],
+    ['Modulus of resilience, σy²/2E','MJ/m³',f.Y&&R.resil!=null?fmt(R.resil,3):null,null],
+    ['Toughness (area under curve)','MJ/m³',f.EL?fmt(R.tough,1):null,null],
+    ['Strain-hardening exponent n ≈ ln(1+εu)','–',f.U?fmt(R.nH,3):null,null],
+    ['True stress at UTS, σ(1+εu)','MPa',f.U?fmt(R.trueU,0):null,null]];
+  S.rows=rows;
+  $('tbl').innerHTML=`<thead><tr><th>Property</th><th>Unit</th><th class="v">Measured</th>${ref?'<th class="v">Handbook</th>':''}</tr></thead><tbody>`+
+    rows.map(r=>`<tr class="${r[2]==null?'pending':''}"><td>${r[0]}</td><td>${r[1]}</td><td class="v">${r[2]==null?'press step':'<b>'+r[2]+'</b>'}</td>${ref?`<td class="v">${r[3]||''}</td>`:''}</tr>`).join('')+'</tbody>';
+}
+function addLog(h){const li=document.createElement('li');li.innerHTML=h;const L=$('log');L.appendChild(li);L.scrollTop=L.scrollHeight;}
+
+/* ================= STEPS ================= */
+function tween(ms,fn){return new Promise(res=>{const t0=performance.now();const f=now=>{const p=Math.min(1,(now-t0)/ms);fn(easeIO(p));render();p<1?requestAnimationFrame(f):res();};requestAnimationFrame(f);});}
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+function setZoom(z){S.zoom=z;$('zFull').classList.toggle('on',z==='full');$('zEl').classList.toggle('on',z==='elastic');render();}
+function done(id){$(id).classList.add('done');}
+async function stepE(){if(!S.res||S.shown.E)return;const R=S.res,s=S.data.s;setZoom('elastic');S.shown.E=1;S.prog.E=0;
+  await tween(1300,p=>S.prog.E=p);done('bE');table();
+  addLog(`<b>E:</b> least-squares line through points ${R.i0}–${R.i1-1} (σ = ${fmt(s[R.i0],0)}–${fmt(s[R.i1-1],0)} MPa), R² = ${R.r2.toFixed(5)} → <b>E = ${fmt(R.E/1000,1)} GPa</b>. Curve leaves the line at A ≈ ${fmt(R.sA,0)} MPa (proportional limit).`+(S.digit?' <i>Digitised image: few points lie in the elastic region, so E is approximate.</i>':''));}
+async function stepY(){if(!S.res||S.shown.Y)return;await stepE();const R=S.res;setZoom('elastic');S.shown.Y=1;S.prog.Y=0;
+  await tween(2200,p=>S.prog.Y=p);done('bY');table();
+  if(R.sB==null){addLog('<b>Yield:</b> the offset line never meets the curve – the material fractured before 0.2% plastic strain (brittle).');return;}
+  addLog(`<b>Yield:</b> line σ = E(ε − ε₀ − ${(R.off*100).toFixed(2)}%) with toe correction ε₀ = ${fmt(Math.abs(R.e0)<5e-7?0:R.e0*100,3)} % meets the curve at ε = ${fmt(R.eB*100,3)} % → <b>σy = ${fmt(R.sB,0)} MPa</b>.`+(R.uy?` Upper yield point ${fmt(R.uy.s,0)} MPa detected (yield-point drop).`:'')+` Resilience σy²/2E = ${fmt(R.resil,3)} MJ/m³.`);}
+async function stepU(){if(!S.res||S.shown.U)return;const R=S.res;setZoom('full');S.shown.U=1;S.prog.U=0;
+  await tween(1200,p=>S.prog.U=p);done('bU');table();
+  addLog(`<b>UTS:</b> maximum stress <b>${fmt(R.sU,0)} MPa</b> at ε = ${fmt(R.eU*100,R.eU<0.02?3:1)} % – ${R.brittle?'the specimen breaks at (or right after) the peak, with no necking':'necking starts here'}. Uniform elongation ${fmt(R.unif,1)} %, n ≈ ${fmt(R.nH,3)}.`);}
+async function stepEL(){if(!S.res||S.shown.EL)return;const R=S.res;setZoom('full');S.shown.EL=1;S.prog.EL=0;
+  await tween(1500,p=>S.prog.EL=p);done('bEL');table();
+  addLog(`<b>Elongation:</b> fracture at ε<sub>f</sub> = ${fmt(R.eF*100,2)} %, σ<sub>f</sub> = ${fmt(R.sF,0)} MPa. Elastic recovery σ<sub>f</sub>/E = ${fmt(R.sF/R.E*100,3)} % → <b>%EL = ${fmt(R.EL,1)} %</b> (${R.EL>=5?'ductile':'brittle'}). Toughness = ${fmt(R.tough,1)} MJ/m³.`);}
+async function stepR(){if(!S.res||S.shown.R)return;S.shown.R=1;S.prog.R=0;await tween(900,p=>S.prog.R=p);done('bR');
+  if(S.res.brittle){addLog(`<b>Regions:</b> elastic 0–${fmt(S.res.eA*100,3)} %, then non-linear with no yield point to fracture at ${fmt(S.res.eF*100,3)} % (brittle).`);return;}
+  addLog(`<b>Regions:</b> elastic 0–${fmt(S.res.eA*100,3)} %, yielding to ${fmt((S.res.eB||S.res.eA)*100,3)} %, strain hardening to ${fmt(S.res.eU*100,1)} %, necking to ${fmt(S.res.eF*100,1)} %.`);}
+async function guard(fn){if(S.busy)return;S.busy=true;stopPlay();try{await fn();}finally{S.busy=false;render();}}
+async function runAll(){await stepE();await wait(500);await stepY();await wait(700);await stepU();await wait(400);await stepEL();await wait(300);await stepR();toast('All properties extracted.');}
+function resetSteps(silent){S.shown={E:0,Y:0,U:0,EL:0,R:0};S.prog={E:0,Y:0,U:0,EL:0,R:0};['bE','bY','bU','bEL','bR'].forEach(i=>$(i).classList.remove('done'));
+  setZoom('full');if(!silent)S.cur=t2e(0.42);$('log').innerHTML='';lastInfo='';table();render();}
+
+/* ================= PLAY ================= */
+function stopPlay(){S.playing=false;S.reveal=Infinity;$('bPlay').textContent='▶ Play tensile test';}
+function play(){if(S.playing){stopPlay();render();return;}if(!S.res)return;setZoom('full');S.playing=true;$('bPlay').textContent='❚❚ Pause';
+  const t0=performance.now(),D=16000;const f=now=>{if(!S.playing)return;const t=Math.min(1,(now-t0)/D);S.cur=t2e(t);S.reveal=S.cur;syncSlider();render();
+    if(t<1)requestAnimationFrame(f);else{stopPlay();render();}};requestAnimationFrame(f);}
+
+/* ================= RENDER ================= */
+let raf=0;function render(){if(raf)return;raf=requestAnimationFrame(()=>{raf=0;readColors();drawPlot();drawSpec();drawLat();updInfo();});}
+const ro=new ResizeObserver(()=>render());['plotWrap','specWrap','latWrap'].forEach(i=>ro.observe($(i)));
+const mo=new MutationObserver(()=>{lastInfo='';render();});mo.observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>{lastInfo='';render();});
+
+/* ================= COPY ================= */
+function copyText(txt,msg){const fb=()=>{$('cpText').value=txt;$('cpModal').hidden=false;$('cpText').select();};
+  try{navigator.clipboard.writeText(txt).then(()=>toast(msg),fb);}catch(e){fb();}}
+
+/* ================= EVENTS ================= */
+$('mat').onchange=loadSample;$('noise').onchange=loadSample;
+$('bE').onclick=()=>guard(stepE);$('bY').onclick=()=>guard(stepY);$('bU').onclick=()=>guard(stepU);$('bEL').onclick=()=>guard(stepEL);$('bR').onclick=()=>guard(stepR);
+$('bAll').onclick=()=>guard(async()=>{resetSteps(true);await runAll();});
+$('bReset').onclick=()=>{stopPlay();resetSteps(false);};
+$('bPlay').onclick=play;
+$('zFull').onclick=()=>setZoom('full');$('zEl').onclick=()=>setZoom('elastic');
+$('inset').onchange=render;$('trueC').onchange=render;
+$('off').onchange=()=>{if(!S.data)return;const r=analyze(S.data.e,S.data.s,S.off(),S.digit);if(r){S.res=r;resetSteps(true);toast('Offset changed to '+(S.off()*100)+'% – run the steps again.');}};
+$('slider').oninput=e=>{stopPlay();S.cur=t2e(e.target.value/1000);render();};
+$('plotWrap').addEventListener('pointermove',ev=>{if(!S.tf||S.playing||S.busy)return;const r=$('cvPlot').getBoundingClientRect(),{box,xr}=S.tf;const px=ev.clientX-r.left;
+  if(px<box.l||px>box.r)return;S.cur=clamp((px-box.l)/box.w*xr,0,S.res.eF);syncSlider();render();});
+$('bUpload').onclick=()=>$('fileIn').click();
+$('fileIn').onchange=ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>{const rows=parseRows(rd.result);if(rows.length<10){toast('No numeric two-column data found in the file.');return;}importRows(rows,f.name);};rd.readAsText(f);ev.target.value='';};
+$('imode').onchange=()=>{const l=$('imode').value==='load';$('ldOpts').hidden=!l;$('ssOpts').hidden=l;};
+$('bPaste').onclick=()=>{const rows=parseRows($('paste').value);if(rows.length<10){toast('Paste at least 10 rows of two numbers.');return;}importRows(rows,'Pasted data');};
+$('bCopyData').onclick=()=>{if(!S.data)return;copyText('strain,stress_MPa\n'+S.data.e.map((x,i)=>x.toFixed(6)+','+S.data.s[i].toFixed(2)).join('\n'),'Data copied as CSV.');};
+$('bCopy').onclick=()=>{if(!S.rows)return;copyText(`Material\t${S.name}\nProperty\tUnit\tMeasured${S.ref?'\tHandbook':''}\n`+S.rows.map(r=>[r[0],r[1],r[2]==null?'':r[2].replace(/,/g,''),S.ref?(r[3]||''):null].filter(v=>v!==null).join('\t')).join('\n'),'Table copied – paste into Excel or Word.');};
+$('cpClose').onclick=()=>$('cpModal').hidden=true;
+
+/* ================= DIGITIZER ================= */
+const D={img:null,data:null,W:0,H:0,cal:{x1:null,x2:null,y1:null,y2:null},mode:null,color:null,pts:[],name:''};
+const dgMsg=t=>$('dgStatus').textContent=t;
+const CALSEQ=['x1','x2','y1','y2'],CALTXT={x1:'Click a point on the X axis whose value you know (X₁, e.g. the 0 tick).',x2:'Click a second X-axis tick far to the right (X₂).',y1:'Click a point on the Y axis with a known value (Y₁, e.g. 0).',y2:'Click a Y-axis tick near the top (Y₂).'};
+function dgLoad(src,name,after){const im=new Image();im.onload=()=>{let W=im.naturalWidth,H=im.naturalHeight;const k=Math.min(1,1600/W);W=Math.round(W*k);H=Math.round(H*k);
+  const oc=document.createElement('canvas');oc.width=W;oc.height=H;const x=oc.getContext('2d',{willReadFrequently:true});x.fillStyle='#fff';x.fillRect(0,0,W,H);x.drawImage(im,0,0,W,H);
+  D.data=x.getImageData(0,0,W,H).data;D.img=oc;D.W=W;D.H=H;D.cal={x1:null,x2:null,y1:null,y2:null};D.pts=[];D.color=null;D.name=name;D.mode=null;$('dgSw').style.background='';
+  const cv=$('dgCv');cv.width=W;cv.height=H;if(after)after();else{D.mode='x1';dgMsg('Image loaded. '+CALTXT.x1);}dgDraw();};im.src=src;}
+function dgDraw(){const cv=$('dgCv'),c=cv.getContext('2d');c.clearRect(0,0,cv.width,cv.height);if(!D.img){c.fillStyle='#888';c.font='20px Inter,sans-serif';c.fillText('No image yet',30,50);return;}
+  c.drawImage(D.img,0,0);const k=D.W/900;
+  const mk=(p,col,lab,vert)=>{if(!p)return;c.strokeStyle=col;c.lineWidth=1.5*Math.max(1,k);c.setLineDash([6,4]);c.beginPath();if(vert){c.moveTo(p.x,0);c.lineTo(p.x,D.H);}else{c.moveTo(0,p.y);c.lineTo(D.W,p.y);}c.stroke();c.setLineDash([]);
+    c.fillStyle=col;c.beginPath();c.arc(p.x,p.y,6*Math.max(1,k),0,7);c.fill();c.font=`bold ${14*Math.max(1,k)}px Inter,sans-serif`;c.fillText(lab,p.x+8,p.y-8);};
+  mk(D.cal.x1,'#0a7d32','X₁',1);mk(D.cal.x2,'#0a7d32','X₂',1);mk(D.cal.y1,'#1d2bd8','Y₁',0);mk(D.cal.y2,'#1d2bd8','Y₂',0);
+  c.fillStyle='#ff7a00';const r=2.5*Math.max(1,k);for(const p of D.pts){c.fillRect(p.x-r,p.y-r,2*r,2*r);}
+  $('dgCount').textContent=D.pts.length+' points';}
+function calOK(){return CALSEQ.every(k=>D.cal[k])&&Math.abs(D.cal.x2.x-D.cal.x1.x)>5&&Math.abs(D.cal.y2.y-D.cal.y1.y)>5;}
+$('dgCv').addEventListener('click',ev=>{if(!D.img)return;const r=$('dgCv').getBoundingClientRect();const x=(ev.clientX-r.left)/r.width*D.W,y=(ev.clientY-r.top)/r.height*D.H;
+  if(CALSEQ.includes(D.mode)){D.cal[D.mode]={x,y};const i=CALSEQ.indexOf(D.mode);D.mode=CALSEQ[i+1]||null;dgMsg(D.mode?CALTXT[D.mode]:'Axes calibrated. Now pick the curve colour and press Auto-extract, or click points by hand.');}
+  else if(D.mode==='pick'){const i=(Math.round(y)*D.W+Math.round(x))*4;D.color=[D.data[i],D.data[i+1],D.data[i+2]];$('dgSw').style.background=`rgb(${D.color})`;D.mode=null;dgMsg('Colour picked. Press Auto-extract.');}
+  else if(D.mode==='man'){D.pts.push({x,y});}
+  dgDraw();});
+function dgAuto(){if(!D.img){dgMsg('Load an image first.');return;}if(!calOK()){dgMsg('Calibrate the axes first (4 clicks).');return;}if(!D.color){dgMsg('Pick the curve colour first.');return;}
+  const tol=+$('dgTol').value,[R0,G0,B0]=D.color,W=D.W,d=D.data;
+  const xa=Math.max(0,Math.round(Math.min(D.cal.x1.x,D.cal.x2.x))),xb=W-1,yb=Math.min(D.H-1,Math.round(Math.max(D.cal.y1.y,D.cal.y2.y))+1);
+  const M=new Uint8Array(W*(yb+1)),rowC=new Uint32Array(yb+1),colC=new Uint32Array(W);
+  for(let y=0;y<=yb;y++)for(let x=xa;x<=xb;x++){const i=(y*W+x)*4;const dd=Math.hypot(d[i]-R0,d[i+1]-G0,d[i+2]-B0);if(dd<=tol){M[y*W+x]=1;rowC[y]++;colC[x]++;}}
+  const spanX=xb-xa+1,pts=[];
+  const runs=[];
+  for(let x=xa;x<=xb;x++){if(colC[x]===0||colC[x]>0.6*(yb+1))continue;let y=0;
+    while(y<=yb&&!(M[y*W+x]&&rowC[y]<0.5*spanX))y++;if(y>yb)continue;let y2=y;while(y2+1<=yb&&M[(y2+1)*W+x])y2++;runs.push([x,y,y2]);}
+  let top=0;runs.forEach((r,i)=>{if(r[1]<runs[top][1])top=i;});
+  const steep=runs.filter((r,i)=>i<top&&r[2]-r[1]>4);
+  if(steep.length){ // steep (elastic) part: scan rows and take the centre of the leftmost run → sub-pixel x
+    const xs0=Math.max(xa,steep[0][0]-2),xs1=steep[steep.length-1][0]+2,yT=Math.min(...steep.map(r=>r[1])),yB=Math.max(...steep.map(r=>r[2]));
+    for(let y=yB;y>=yT;y--){if(rowC[y]>=0.5*spanX)continue;let x=xs0;while(x<=xs1&&!M[y*W+x])x++;if(x>xs1)continue;let x2=x;while(x2+1<=xs1&&M[y*W+x2+1])x2++;pts.push({x:(x+x2)/2,y});}
+    runs.forEach(([x,y,y2])=>{if(x>xs1)pts.push({x,y:(y+y2)/2});});
+  } else runs.forEach(([x,y,y2])=>pts.push({x,y:(y+y2)/2}));
+  D.pts=pts;D.mode=null;dgDraw();dgMsg(pts.length?`Found ${pts.length} curve points. Check them, then press "Use these points".`:'No pixels matched – raise the tolerance or pick the colour again.');}
+function dgUse(){if(!calOK()){dgMsg('Calibrate the axes first.');return;}if(D.pts.length<10){dgMsg('Need at least 10 points.');return;}
+  const c=D.cal,vx1=+$('cx1').value,vx2=+$('cx2').value,vy1=+$('cy1').value,vy2=+$('cy2').value;
+  const um={MPa:1,GPa:1000,ksi:6.894757}[$('dgUS').value],pct=$('dgPct').checked;const e=[],s=[];
+  for(const p of D.pts){let xv=vx1+(p.x-c.x1.x)*(vx2-vx1)/(c.x2.x-c.x1.x),yv=vy1+(p.y-c.y1.y)*(vy2-vy1)/(c.y2.y-c.y1.y);if(pct)xv/=100;if(xv<-1e-4)continue;e.push(Math.max(0,xv));s.push(Math.max(0,yv*um));}
+  if(e[0]>0){e.unshift(0);s.unshift(0);}
+  if(loadData(e,s,'Digitised: '+D.name,null,true)){$('dg').hidden=true;toast('Image data loaded – press the step buttons.');}}
+function demoGraph(){const W=900,H=560,c0=document.createElement('canvas');c0.width=W;c0.height=H;const c=c0.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,W,H);
+  const b={l:90,r:860,t:50,b:490},X=v=>b.l+v/30*(b.r-b.l),Y=v=>b.b-v/500*(b.b-b.t);
+  c.strokeStyle='#e3e3e3';c.lineWidth=1;c.font='16px Arial';c.fillStyle='#222';
+  for(let v=0;v<=30;v+=5){c.beginPath();c.moveTo(X(v),b.t);c.lineTo(X(v),b.b);c.stroke();c.textAlign='center';c.fillText(v,X(v),b.b+24);}
+  for(let v=0;v<=500;v+=100){c.beginPath();c.moveTo(b.l,Y(v));c.lineTo(b.r,Y(v));c.stroke();c.textAlign='right';c.fillText(v,b.l-10,Y(v)+5);}
+  c.strokeStyle='#222';c.lineWidth=2;c.beginPath();c.moveTo(b.l,b.t);c.lineTo(b.l,b.b);c.lineTo(b.r,b.b);c.stroke();
+  c.textAlign='center';c.fillText('Strain (%)',(b.l+b.r)/2,b.b+50);c.save();c.translate(30,(b.t+b.b)/2);c.rotate(-Math.PI/2);c.fillText('Stress (MPa)',0,0);c.restore();
+  c.font='bold 18px Arial';c.fillText('Tensile test – mild steel (demo image)',(b.l+b.r)/2,30);
+  const g=generate('a36',false);c.strokeStyle='#d0312d';c.lineWidth=3;c.beginPath();g.e.forEach((x,i)=>{const px=X(x*100),py=Y(g.s[i]);i?c.lineTo(px,py):c.moveTo(px,py);});c.stroke();
+  dgLoad(c0.toDataURL(),'demo graph',()=>{D.cal={x1:{x:X(0),y:b.b},x2:{x:X(30),y:b.b},y1:{x:b.l,y:Y(0)},y2:{x:b.l,y:Y(500)}};$('cx1').value=0;$('cx2').value=30;$('cy1').value=0;$('cy2').value=500;$('dgPct').checked=true;
+    D.color=[208,49,45];$('dgSw').style.background='rgb(208,49,45)';dgMsg('Demo graph loaded, axes calibrated and red curve colour picked. Press Auto-extract.');});}
+$('bImage').onclick=()=>{$('dg').hidden=false;dgDraw();};
+$('dgClose').onclick=()=>$('dg').hidden=true;
+$('dgUp').onclick=()=>$('dgFile').click();
+$('dgFile').onchange=ev=>{const f=ev.target.files[0];if(!f)return;const rd=new FileReader();rd.onload=()=>dgLoad(rd.result,f.name);rd.readAsDataURL(f);ev.target.value='';};
+$('dgDemo').onclick=demoGraph;
+$('dgCal').onclick=()=>{if(!D.img){dgMsg('Load an image first.');return;}D.cal={x1:null,x2:null,y1:null,y2:null};D.mode='x1';dgMsg(CALTXT.x1);dgDraw();};
+$('dgPick').onclick=()=>{if(!D.img)return;D.mode='pick';dgMsg('Click on the curve line to pick its colour.');};
+$('dgAuto').onclick=dgAuto;
+$('dgMan').onclick=()=>{if(!D.img)return;D.mode='man';dgMsg('Click along the curve to add points (from origin to fracture).');};
+$('dgUndo').onclick=()=>{D.pts.pop();dgDraw();};
+$('dgClear').onclick=()=>{D.pts=[];dgDraw();};
+$('dgUse').onclick=dgUse;
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){$('dg').hidden=true;$('cpModal').hidden=true;}});
+
+/* ================= START ================= */
+readColors();loadSample();
+}
+</script>
+</body>
+</html>
